@@ -48,15 +48,30 @@ The dataset uses the following label mapping:
 
 Posts whose dominant emotion is loneliness, disappointment, grief, regret, discouragement, helplessness, or emotional pain.
 
+**Example posts:**
+
+1. `i feel a lil bit gloomy`
+2. `i didn t feel abused and quite honestly it made my day a little better`
+
 ### Joy
 
 Posts whose dominant emotion is happiness, gratitude, pride, relief, success, excitement, or positive appreciation.
+
+**Example posts:**
+
+1. `i woke up this morning feeling hopeful and energetic`
+2. `i feel really lucky for everything i have this year a job a roof over my head heat and the ability to give my kids a fun christmas`
 
 ### Anger
 
 Posts whose dominant emotion is irritation, frustration, outrage, resentment, annoyance, blame, or hostility.
 
 When a post contained multiple emotions, I assigned the label based on the strongest overall emotional signal rather than individual keywords.
+
+**Example posts:**
+
+1. `i cannot help but feel outraged to recognize that essentially children in america have no rights at all`
+2. `i seem to wake up every day recently feeling immensely irritable and i cant quite work out why`
 
 More detailed boundary rules and annotation decisions are documented in [`planning.md`](./planning.md).
 
@@ -91,6 +106,46 @@ The second approach fine-tuned `distilbert-base-uncased` on the labeled emotion 
 
 The tokenizer converted each post into model inputs, and the model learned to predict one of the three emotion labels. The validation set was used during training, while the held-out test set was used for the final comparison.
 
+### Fine-Tuned DistilBERT
+
+The second approach fine-tuned `distilbert-base-uncased` on the labeled emotion dataset.
+
+The tokenizer converted each post into model inputs, and the model learned to predict one of the three emotion labels. The validation set was used during training, while the held-out test set was used only for the final comparison.
+
+#### Training Setup and Hyperparameter Decisions
+
+The model was trained using the following configuration:
+
+| Hyperparameter            |                     Value | Purpose                                                                          |
+| ------------------------- | ------------------------: | -------------------------------------------------------------------------------- |
+| Base model                | `distilbert-base-uncased` | Provides pretrained English language representations                             |
+| Number of epochs          |                         3 | Allows the model to learn from the dataset without training for too long         |
+| Training batch size       |                        16 | Balances training stability and GPU memory usage                                 |
+| Evaluation batch size     |                        32 | Speeds up evaluation because gradients are not calculated                        |
+| Learning rate             |                    `2e-5` | Uses a small update size suitable for fine-tuning a pretrained BERT-family model |
+| Weight decay              |                    `0.01` | Helps reduce overfitting                                                         |
+| Warmup steps              |                        50 | Gradually increases the learning rate at the beginning of training               |
+| Evaluation strategy       |               Every epoch | Measures validation performance after each full pass through the training data   |
+| Save strategy             |               Every epoch | Saves a checkpoint after each epoch                                              |
+| Best-model metric         |                  Accuracy | Selects the checkpoint with the highest validation accuracy                      |
+| Maximum saved checkpoints |                         1 | Reduces storage usage by keeping only the most relevant checkpoint               |
+
+I used the hyperparameter values suggested in the project starter code as the initial training configuration. These values provided a reasonable starting point for fine-tuning DistilBERT on a relatively small dataset. In particular, three training epochs helped limit the risk of overfitting, while the learning rate of `2e-5` allowed the pretrained model weights to be updated gradually rather than too aggressively.
+
+The model was evaluated and saved after every epoch. With `load_best_model_at_end=True`, the final model was not automatically the checkpoint from the last epoch. Instead, the checkpoint with the highest validation accuracy was loaded for final testing. This helped avoid using a later checkpoint if its validation performance had already started to decline.
+
+#### Possible Hyperparameter Improvements
+
+Several settings could be adjusted in future experiments:
+
+* **Number of epochs:** Testing 2, 3, 4, or 5 epochs could show whether the model is underfitting or beginning to overfit.
+* **Learning rate:** Comparing values such as `1e-5`, `2e-5`, and `3e-5` could identify a more stable or effective update size.
+* **Batch size:** Testing batch sizes of 8, 16, and 32 could affect training stability, speed, and memory usage.
+* **Weight decay:** Adjusting this value could improve regularization if the model overfits the training data.
+
+For this project, accuracy was used to select the best checkpoint because the dataset was balanced across the three classes. However, using **macro F1** in a future experiment may be more appropriate because it directly considers performance on every class and would penalize a model that performs poorly on one emotion category.
+
+
 ---
 
 ## Evaluation Metrics
@@ -108,26 +163,46 @@ Accuracy provides a high-level result, while the class-level metrics and confusi
 
 ---
 
-## Results
+### Overall Model Comparison
 
-### Overall Comparison
-
-| Model | Test Accuracy | Correct Predictions |
-|---|---:|---:|
-| Groq baseline | **75.56%** | 68 out of 90 |
-| Fine-tuned DistilBERT | **80.00%** | 72 out of 90 |
+| Model                 |   Accuracy | Correct Predictions |
+| --------------------- | ---------: | ------------------: |
+| Groq baseline         | **75.56%** |        68 out of 90 |
+| Fine-tuned DistilBERT | **80.00%** |        72 out of 90 |
 
 The fine-tuned model performed **4.44 percentage points above** the Groq baseline. Therefore, fine-tuning improved overall test accuracy in this experiment.
 
-### Fine-Tuned Model by Class
+### Per-Class Metrics
 
-| True Class | Correct | Total | Recall |
-|---|---:|---:|---:|
-| Sadness | 23 | 30 | 76.67% |
-| Joy | 26 | 30 | 86.67% |
-| Anger | 23 | 30 | 76.67% |
+#### Groq Baseline
 
-Joy was the strongest class by recall. Sadness and anger had equal recall, and the most important remaining problem was confusion between those two negative emotions.
+| Class                | Precision |   Recall | F1-score | Support |
+| -------------------- | --------: | -------: | -------: | ------: |
+| Sadness              |      0.69 |     0.83 |     0.76 |      30 |
+| Joy                  |      0.77 |     0.80 |     0.79 |      30 |
+| Anger                |      0.83 |     0.63 |     0.72 |      30 |
+| **Macro Average**    |  **0.76** | **0.76** | **0.75** |  **90** |
+| **Weighted Average** |  **0.76** | **0.76** | **0.75** |  **90** |
+
+The Groq baseline achieved its highest recall on `sadness` at **0.83**, meaning that it correctly identified most true sadness examples. However, its sadness precision was only **0.69**, showing that some examples predicted as sadness actually belonged to another class.
+
+For `anger`, the pattern was reversed. The model achieved relatively high precision of **0.83**, but recall was only **0.63**. This means that its anger predictions were usually correct, but it failed to identify many true anger examples.
+
+#### Fine-Tuned DistilBERT
+
+| Class                | Precision |   Recall | F1-score | Support |
+| -------------------- | --------: | -------: | -------: | ------: |
+| Sadness              |      0.72 |     0.77 |     0.74 |      30 |
+| Joy                  |      0.93 |     0.87 |     0.90 |      30 |
+| Anger                |      0.77 |     0.77 |     0.77 |      30 |
+| **Macro Average**    |  **0.80** | **0.80** | **0.80** |  **90** |
+| **Weighted Average** |  **0.80** | **0.80** | **0.80** |  **90** |
+
+The fine-tuned model performed best on `joy`, with precision of **0.93**, recall of **0.87**, and an F1-score of **0.90**. This indicates that joy was the easiest class for the model to distinguish.
+
+The largest improvement was in `anger` recall, which increased from **0.63** for the baseline to **0.77** for the fine-tuned model. This means that fine-tuning helped the model identify more true anger examples.
+
+However, sadness remained the weakest fine-tuned class by F1-score, at **0.74**. This result is consistent with the confusion matrix, which shows continued overlap between sadness and anger.
 
 ---
 
@@ -235,15 +310,45 @@ The next version of the project could:
 
 ## AI Tool Usage
 
-AI tools were used to support:
+AI tools were used as assistants during this project, but their output was not treated as automatic ground truth. I reviewed the suggestions, compared them with my label definitions and evaluation results, and made the final decisions myself.
 
-- Label boundary stress-testing
-- Review of ambiguous annotation cases
-- Prompt experimentation for the baseline classifier
-- Analysis of evaluation metrics and confusion patterns
-- Assistance with project documentation
+### Instance 1: Label Boundary Stress-Testing and Annotation Review
 
-AI-generated suggestions were treated as support rather than automatic ground truth. Final label rules, interpretations, and conclusions were reviewed against the dataset and evaluation results.
+I gave an LLM my definitions of `sadness`, `joy`, and `anger` and asked it to generate five to ten short posts near the boundaries between the labels. I then labeled the generated examples manually.
+
+The purpose was not to let the LLM complete the annotation for me. Instead, I used the generated examples to test whether my own label definitions were clear and consistent. Some examples were difficult to classify because they contained more than one emotion, especially combinations of sadness and anger.
+
+After reviewing these examples, I refined my labeling rule:
+
+* `sadness` focuses more on inward emotional pain, loneliness, helplessness, or rejection.
+* `anger` focuses more on outward blame, resentment, irritation, or unfairness.
+
+I did not accept every generated example or interpretation. Some examples were too ambiguous to support only one label, so I treated them as evidence that the label boundary needed to be clarified rather than as final training examples.
+
+### Instance 2: Diagnosing Fine-Tuning Performance
+
+I asked an AI tool to help me analyze why the first fine-tuned model performed poorly. The initial version used approximately 300 labeled examples and achieved only about **42% accuracy**. I shared the training results and discussed possible causes with the AI.
+
+The AI suggested that the dataset might be too small for the model to learn the three emotion categories reliably, especially the difficult boundary between sadness and anger. I did not accept this suggestion automatically. I tested it by expanding the dataset from 300 to 600 balanced examples and retraining the model.
+
+After the dataset was increased, the fine-tuned model achieved **80.00% accuracy**. Based on this experiment, I concluded that the smaller dataset did not provide enough coverage and that increasing the amount and diversity of training data improved model performance.
+
+### Instance 3: Error Analysis and Future Task Design
+
+I also used an AI tool to discuss the model's confusion matrix and wrong predictions. The analysis showed that sadness and anger were still frequently confused, even after the overall accuracy improved.
+
+The AI initially suggested adding more boundary examples and refining the label definitions. I agreed with these suggestions, but I also revised the interpretation after reviewing the wrong predictions manually. Some posts genuinely contained multiple emotions, and even a human annotator could reasonably disagree about the dominant label.
+
+This led me to consider whether the original single-label, three-class design may be too restrictive for short emotional posts. For a future version, I would compare the current approach with either:
+
+* binary classification using `positive` and `negative`, or
+* multi-label classification that allows more than one emotion label.
+
+I did not replace the current task design during this project because the assignment required the original three labels. Instead, I documented binary and multi-label classification as possible future improvements.
+
+### Annotation Assistance Disclosure
+
+AI was used to generate stress-test examples and discuss ambiguous cases, but it did not automatically label the final dataset. I manually reviewed the examples and made the final annotation decisions.
 
 ---
 
@@ -286,8 +391,6 @@ Its weakest class was `anger`, with recall of **0.63**. This means the baseline 
 The fine-tuned DistilBERT model performed best on `joy`, with precision of **0.93**, recall of **0.87**, and an F1-score of **0.90**. This suggests that positive emotional language was the most distinct category for the model.
 
 The fine-tuned model also improved the balance across classes. Compared with the baseline, `anger` recall increased from **0.63** to **0.77**, and the overall macro F1 improved from **0.75** to **0.80**. However, `sadness` remained the most difficult class, with an F1-score of **0.74**, showing that overlap between sadness and anger was still the main challenge.
-
--==========
 
 ## Misclassification Analysis
 
