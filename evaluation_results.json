@@ -1,0 +1,12 @@
+{
+  "baseline_accuracy": 0.7556,
+  "finetuned_accuracy": 0.8,
+  "improvement": 0.0444,
+  "test_set_size": 90,
+  "label_map": {
+    "sadness": 0,
+    "joy": 1,
+    "anger": 2
+  },
+  "model": "distilbert-base-uncased"
+}
