@@ -476,3 +476,13 @@ This result suggested that 300 examples did not provide enough coverage for the 
 Because of this observation, I expanded the dataset from 300 to 600 labeled examples while keeping the three classes balanced. After increasing the amount of training data, the fine-tuned model achieved **80.00% test accuracy**, which was substantially higher than the result from the smaller dataset.
 
 This divergence was therefore an evidence-based implementation decision. Although the original dataset size was enough to build and run the training pipeline, the evaluation results showed that additional data was necessary to produce a more stable and useful classifier.
+
+### Demo on fine-tuned model with label and confidence visible
+
+|index|Text|True Label|Predicted Label|Confidence|Result|
+|---|---|---|---|---|---|
+|0|ive just spent the last half hour feeling ridiculously angry over insensitive comments from my partner but that all changed a few minutes ago to real pride over how much i have changed|anger|anger|0\.53|Correct|
+|1|i was feeling kind of rebellious and my post was a little on the|anger|anger|0\.48|Correct|
+|2|im just feeling rebellious|anger|anger|0\.5|Correct|
+|3|ill just paraphrase i ranted about not being able to trust anybody and being hurt feeling rejected etc|sadness|anger|0\.49|Incorrect|
+|4|i feel like this is like fake bogart said at one point in the show|sadness|joy|0\.36|Incorrect|
